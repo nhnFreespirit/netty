@@ -30,7 +30,6 @@ import java.nio.channels.ClosedChannelException;
 import java.util.List;
 
 import static io.netty.handler.codec.http.HttpHeadersTestUtils.of;
-import static io.netty.util.ReferenceCountUtil.releaseLater;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
@@ -162,7 +161,7 @@ public class HttpObjectAggregatorTest {
         assertEquals(HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE, response.status());
         assertEquals("0", response.headers().get(HttpHeaderNames.CONTENT_LENGTH));
 
-        if (serverShouldCloseConnection(message)) {
+        if (serverShouldCloseConnection(message, response)) {
             assertFalse(embedder.isOpen());
             assertFalse(embedder.finish());
         } else {
@@ -170,7 +169,11 @@ public class HttpObjectAggregatorTest {
         }
     }
 
-    private static boolean serverShouldCloseConnection(HttpRequest message) {
+    private static boolean serverShouldCloseConnection(HttpRequest message, HttpResponse response) {
+        // If the response wasn't keep-alive, the server should close the connection.
+        if (!HttpUtil.isKeepAlive(response)) {
+            return true;
+        }
         // The connection should only be kept open if Expect: 100-continue is set,
         // or if keep-alive is on.
         if (HttpUtil.is100ContinueExpected(message)) {
@@ -282,15 +285,15 @@ public class HttpObjectAggregatorTest {
         HttpUtil.set100ContinueExpected(message, true);
         HttpUtil.setContentLength(message, 16);
 
-        HttpContent chunk1 = releaseLater(new DefaultHttpContent(Unpooled.copiedBuffer("some", CharsetUtil.US_ASCII)));
-        HttpContent chunk2 = releaseLater(new DefaultHttpContent(Unpooled.copiedBuffer("test", CharsetUtil.US_ASCII)));
+        HttpContent chunk1 = new DefaultHttpContent(Unpooled.copiedBuffer("some", CharsetUtil.US_ASCII));
+        HttpContent chunk2 = new DefaultHttpContent(Unpooled.copiedBuffer("test", CharsetUtil.US_ASCII));
         HttpContent chunk3 = LastHttpContent.EMPTY_LAST_CONTENT;
 
         // Send a request with 100-continue + large Content-Length header value.
         assertFalse(embedder.writeInbound(message));
 
         // The aggregator should respond with '417.'
-        FullHttpResponse response = (FullHttpResponse) embedder.readOutbound();
+        FullHttpResponse response = embedder.readOutbound();
         assertEquals(HttpResponseStatus.EXPECTATION_FAILED, response.status());
         assertEquals("0", response.headers().get(HttpHeaderNames.CONTENT_LENGTH));
 
@@ -377,15 +380,15 @@ public class HttpObjectAggregatorTest {
         HttpUtil.set100ContinueExpected(message, true);
         HttpUtil.setContentLength(message, 16);
 
-        HttpContent chunk1 = releaseLater(new DefaultHttpContent(Unpooled.copiedBuffer("some", CharsetUtil.US_ASCII)));
-        HttpContent chunk2 = releaseLater(new DefaultHttpContent(Unpooled.copiedBuffer("test", CharsetUtil.US_ASCII)));
+        HttpContent chunk1 = new DefaultHttpContent(Unpooled.copiedBuffer("some", CharsetUtil.US_ASCII));
+        HttpContent chunk2 = new DefaultHttpContent(Unpooled.copiedBuffer("test", CharsetUtil.US_ASCII));
         HttpContent chunk3 = LastHttpContent.EMPTY_LAST_CONTENT;
 
         // Send a request with 100-continue + large Content-Length header value.
         assertFalse(embedder.writeInbound(message));
 
         // The aggregator should respond with '417'.
-        FullHttpResponse response = (FullHttpResponse) embedder.readOutbound();
+        FullHttpResponse response = embedder.readOutbound();
         assertEquals(HttpResponseStatus.EXPECTATION_FAILED, response.status());
         assertEquals("0", response.headers().get(HttpHeaderNames.CONTENT_LENGTH));
 
