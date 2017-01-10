@@ -39,9 +39,7 @@ import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.handler.codec.http2.Http2CodecUtil.HTTP_UPGRADE_STREAM_ID;
 import static io.netty.handler.codec.http2.Http2CodecUtil.connectionPrefaceBuf;
 import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
-import static io.netty.handler.codec.http2.Http2Error.INTERNAL_ERROR;
-import static io.netty.handler.codec.http2.Http2Error.NO_ERROR;
-import static io.netty.handler.codec.http2.Http2Error.PROTOCOL_ERROR;
+import static io.netty.handler.codec.http2.Http2Error.*;
 import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static io.netty.handler.codec.http2.Http2Exception.isStreamError;
 import static io.netty.handler.codec.http2.Http2FrameTypes.SETTINGS;
@@ -631,6 +629,11 @@ public class Http2ConnectionHandler extends ByteToMessageDecoder implements Http
             if (stream != null && !stream.isHeadersSent()) {
                 handleServerHeaderDecodeSizeError(ctx, stream);
             }
+
+            // Our header table has likely gotten out of sync with the client. This can cause
+            // serious corruption... Close connection.
+            goAway(ctx, streamId, COMPRESSION_ERROR.code(), Http2CodecUtil.toByteBuf(ctx, cause), ctx.newPromise());
+            return;
         }
 
         if (stream == null) {

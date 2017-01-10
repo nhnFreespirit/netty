@@ -43,6 +43,7 @@ import static io.netty.util.AsciiString.EMPTY_STRING;
 import static io.netty.util.AsciiString.of;
 import static java.lang.Integer.MAX_VALUE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -275,6 +276,31 @@ public class DecoderTest {
         }
         sb.append("00");
         decode(sb.toString());
+    }
+
+    @Test
+    public void testCanDecodeAfterException() throws Http2Exception {
+        // Ignore header name that exceeds max header size
+        StringBuilder sb = new StringBuilder();
+        sb.append("007F817F");
+        for (int i = 0; i < 16384; i++) {
+            sb.append("61"); // 'a'
+        }
+        sb.append("00");
+
+        boolean exceptionCaught = false;
+
+        try {
+            decode(sb.toString());
+        } catch (Http2Exception e) {
+            exceptionCaught = true;
+        }
+
+        assertTrue(exceptionCaught);
+
+        decode("4004" + hex("name") + "05" + hex("value") + "BE");
+        verify(mockHeaders, times(2)).add(of("name"), of("value"));
+        verifyNoMoreInteractions(mockHeaders);
     }
 
     @Test(expected = Http2Exception.class)
